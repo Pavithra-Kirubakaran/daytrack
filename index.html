@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>⏱️ Daily Activity Tracker</title>
+  <meta name="description" content="Personal daily activity tracker with analytics and Excel export. Oct 7 – Nov 8, 2026." />
+  <meta name="theme-color" content="#0f0f1a" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230d0d1a'/><text y='48' x='8' font-size='44'>⏱</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    /* ─── DESIGN TOKENS ─────────────────────────────────────────── */
+    :root {
+      --bg-base:       #0d0d1a;
+      --bg-surface:    #13132a;
+      --bg-card:       #1a1a35;
+      --bg-card2:      #1f1f40;
+      --border:        rgba(255,255,255,0.08);
+      --border-glow:   rgba(124,90,255,0.35);
+      --text-primary:  #f0f0ff;
+      --text-secondary:#a0a0c0;
+      --text-muted:    #60607a;
+      --accent:        #7c5aff;
+      --accent-2:      #ff5ab8;
+      --success:       #32cd32;
+      --radius-sm:     8px;
+      --radius-md:     14px;
+      --radius-lg:     20px;
+      --shadow-card:   0 4px 32px rgba(0,0,0,0.45);
+      --shadow-glow:   0 0 24px rgba(124,90,255,0.2);
+
+      /* Category colors */
+      --c-morning:     #FFD700;
+
+    /* Offline banner */
+    --offline-bg: rgba(255,140,0,0.12);
+    --offline-border: rgba(255,140,0,0.4);
+      --c-commute:     #FF8C00;
+      --c-work:        #4F8EF7;
+      --c-learning:    #A855F7;
+      --c-reading:     #20B2AA;
+      --c-hobby:       #FF69B4;
+      --c-fitness:     #4ADE80;
+      --c-entertain:   #F43F5E;
+      --c-break:       #6B7280;
+    }
+
+    /* ─── RESET & BASE ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    /* ─── OFFLINE BANNER ───────────────────────────────────── */
+    #offline-banner {
+      display: none;
+      background: var(--offline-bg);
+      border-bottom: 1px solid var(--offline-border);
+      color: #FF8C00;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-align: center;
+      padding: 7px 16px;
+      letter-spacing: 0.02em;
+    }
+    #offline-banner.visible { display: block; }
+    #install-bar {
+      display: none;
+      background: linear-gradient(135deg,#1a1040,#2a1060);
+      border-bottom: 1px solid var(--border-glow);
+      padding: 8px 16px;
+      align-items: center; gap: 10px;
+      font-size: 0.8rem; color: var(--text-secondary);
+    }
+    #install-bar.visible { display: flex; }
+    #install-bar button {
+      margin-left: auto; padding: 5px 14px;
+      background: var(--accent); color: #fff;
+      border-radius: 12px; font-size: 0.78rem; font-weight: 700;
+      flex-shrink: 0;
+    }
+    #install-bar .ib-dismiss {
+      background: transparent; color: var(--text-muted); font-size: 1.1rem; padding: 0 4px;
+      margin-left: 4px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; border: none; outline: none; }
+    input, textarea, select { font-family: inherit; }
+
+    /* ─── SCROLLBAR ──────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-surface); }
+    ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+
+    /* ─── APP SHELL ──────────────────────────────────────────────── */
+    #app { display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* ─── HEADER ─────────────────────────────────────────────────── */
+    .header {
+      background: linear-gradient(135deg, #13132a 0%, #1a1040 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+    .header-inner {
+      max-width: 900px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px; gap: 12px;
+    }
+    .logo {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.15rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      white-space: nowrap;
+    }
+    .logo span { font-size: 1.4rem; }
+    .header-date {
+      font-size: 0.78rem; color: var(--text-secondary);
+      background: var(--bg-card); padding: 4px 10px; border-radius: 20px;
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .btn-icon {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: var(--bg-card2); border: 1px solid var(--border);
+      color: var(--text-secondary); font-size: 1.1rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s; cursor: pointer;
+    }
+    .btn-icon:hover { border-color: var(--accent); color: var(--accent); transform: scale(1.08); }
+    .btn-icon.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ─── NAV TABS ───────────────────────────────────────────────── */
+    .nav-tabs {
+      display: flex; overflow-x: auto; gap: 4px;
+      padding: 10px 16px; background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      scrollbar-width: none;
+    }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab {
+      flex-shrink: 0; padding: 8px 18px; border-radius: 20px;
+      font-size: 0.82rem; font-weight: 600;
+      background: transparent; color: var(--text-muted);
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+    .nav-tab:hover { color: var(--text-secondary); background: var(--bg-card); }
+    .nav-tab.active {
+      background: var(--accent); color: #fff;
+      box-shadow: 0 0 16px rgba(124,90,255,0.4);
+    }
+
+    /* ─── PAGE CONTAINER ─────────────────────────────────────────── */
+    .page { display: none; flex: 1; padding: 16px; }
+    .page.active { display: block; }
+    .page-inner { max-width: 900px; margin: 0 auto; }
+
+    /* ─── SECTION TITLE ──────────────────────────────────────────── */
+    .section-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.1rem; font-weight: 700;
+      margin-bottom: 14px; color: var(--text-primary);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title::after {
+      content: ''; flex: 1; height: 1px;
+      background: var(--border);
+    }
+
+    /* ─── CARDS ──────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      box-shadow: var(--shadow-card);
+    }
+
+    /* ─── LOG FORM ───────────────────────────────────────────────── */
+    .current-slot-banner {
+      background: linear-gradient(135deg, #1f1050 0%, #2a1060 100%);
+      border: 1px solid var(--border-glow);
+      border-radius: var(--radius-lg);
+      padding: 14px 18px;
+      margin-bottom: 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: var(--shadow-glow);
+    }
+    .slot-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px; }
+    .slot-time { font-family: 'Space Grotesk', sans-serif; font-size: 1.35rem; font-weight: 700; color: var(--accent); }
+    .slot-date { font-size: 0.8rem; color: var(--text-secondary); }
+    .slot-status { font-size: 0.78rem; padding: 4px 12px; border-radius: 12px; font-weight: 600; }
+    .slot-status.logged { background: rgba(74,222,128,0.15); color: var(--success); }
+    .slot-status.pending { background: rgba(255,90,184,0.15); color: var(--accent-2); }
+
+    /* Date override */
+    .date-override {
+      background: var(--bg-card2); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 12px 16px;
+      margin-bottom: 18px; display: flex; align-items: center; gap: 12px;
+      flex-wrap: wrap;
+    }
+    .date-override label { font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; }
+    .date-override input[type="date"], .date-override select {
+      background: var(--bg-base); border: 1px solid var(--border);
+      color: var(--text-primary); border-radius: var(--radius-sm);
+      padding: 6px 10px; font-size: 0.85rem;
+    }
+    .date-override input:focus, .date-override select:focus {
+      border-color: var(--accent); outline: none;
+    }
+
+    /* Category grid */
+    .cat-label { font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
+    .cat-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px; margin-bottom: 18px;
+    }
+    .cat-btn {
+      padding: 12px 10px; border-radius: var(--radius-md);
+      font-size: 0.82rem; font-weight: 600; color: #fff;
+      border: 2px solid transparent;
+      background: var(--bg-card2);
+      transition: all 0.18s; text-align: center;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .cat-btn .cat-icon { font-size: 1.4rem; }
+    .cat-btn:hover { transform: translateY(-2px); filter: brightness(1.2); }
+    .cat-btn.selected {
+      border-color: #fff;
+      transform: translateY(-2px) scale(1.03);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    }
+
+    /* Sub chips */
+    .sub-row {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin-bottom: 16px; min-height: 36px;
+    }
+    .sub-chip {
+      padding: 7px 16px; border-radius: 20px;
+      font-size: 0.8rem; font-weight: 600;
+      background: var(--bg-card2); color: var(--text-secondary);
+      border: 1.5px solid var(--border);
+      transition: all 0.15s;
+    }
+    .sub-chip:hover { border-color: var(--accent); color: var(--text-primary); }
+    .sub-chip.selected {
+      background: var(--accent); color: #fff;
+      border-color: var(--accent);
+      box-shadow: 0 0 12px rgba(124,90,255,0.4);
+    }
+
+    /* Notes */
+    .notes-input {
+      width: 100%; background: var(--bg-card2);
+      border: 1.5px solid var(--border); border-radius: var(--radius-md);
+      color: var(--text-primary); padding: 12px 14px;
+      font-size: 0.88rem; resize: none; height: 64px;
+      margin-bottom: 16px; transition: border-color 0.2s;
+    }
+    .notes-input:focus { border-color: var(--accent); outline: none; }
+    .notes-input::placeholder { color: var(--text-muted); }
+
+    /* Log button */
+    .log-btn {
+      width: 100%; padding: 16px;
+      background: linear-gradient(135deg, var(--accent), #9b6eff);
+      color: #fff; border-radius: var(--radius-md);
+      font-size: 1rem; font-weight: 700; letter-spacing: 0.03em;
+      transition: all 0.2s;
+      box-shadow: 0 4px 20px rgba(124,90,255,0.4);
+      margin-bottom: 20px;
+    }
+    .log-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(124,90,255,0.55); }
+    .log-btn:active { transform: translateY(0); }
+    .log-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Recent entries */
+    .recent-title { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
+    .recent-list { display: flex; flex-direction: column; gap: 8px; }
+    .recent-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px; border-radius: var(--radius-md);
+      background: var(--bg-card2); border: 1px solid var(--border);
+      animation: fadeSlide 0.3s ease;
+    }
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .recent-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .recent-time { font-size: 0.75rem; color: var(--text-muted); width: 80px; flex-shrink: 0; }
+    .recent-cat { font-size: 0.82rem; font-weight: 600; color: var(--text-primary); }
+    .recent-sub { font-size: 0.75rem; color: var(--text-secondary); }
+    .recent-note { font-size: 0.72rem; color: var(--text-muted); margin-left: auto; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ─── TIMELINE GRID ──────────────────────────────────────────── */
+    .timeline-nav {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px; background: var(--bg-card);
+      border-radius: var(--radius-md); padding: 10px 14px;
+      border: 1px solid var(--border);
+    }
+    .timeline-nav button {
+      background: var(--bg-card2); border: 1px solid var(--border);
+      color: var(--text-primary); border-radius: var(--radius-sm);
+      padding: 6px 14px; font-size: 0.85rem;
+      transition: all 0.15s;
+    }
+    .timeline-nav button:hover { border-color: var(--accent); color: var(--accent); }
+    .timeline-date {
+      flex: 1; text-align: center;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.95rem; font-weight: 600;
+    }
+    .timeline-completion {
+      font-size: 0.78rem; color: var(--text-secondary);
+      background: var(--bg-card2); padding: 4px 10px; border-radius: 12px;
+    }
+
+    /* Hour labels + grid */
+    .grid-wrapper { overflow-x: auto; }
+    .time-header {
+      display: flex; margin-left: 48px; margin-bottom: 4px;
+    }
+    .time-label {
+      flex-shrink: 0; width: 52px; font-size: 0.6rem;
+      color: var(--text-muted); text-align: center;
+    }
+    .grid-row { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+    .grid-row-label {
+      width: 44px; flex-shrink: 0; font-size: 0.72rem;
+      color: var(--text-muted); text-align: right; padding-right: 8px;
+    }
+    .slot-cell {
+      flex-shrink: 0; width: 48px; height: 34px;
+      border-radius: 6px; background: var(--bg-card2);
+      border: 1px solid var(--border);
+      position: relative; cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .slot-cell:hover { transform: scale(1.12); z-index: 5; border-color: rgba(255,255,255,0.3); }
+    .slot-cell.filled { border-color: transparent; }
+    .slot-cell .cell-tooltip {
+      display: none; position: absolute; bottom: 110%;
+      left: 50%; transform: translateX(-50%);
+      background: #1a1a35; border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 10px;
+      font-size: 0.72rem; white-space: nowrap; z-index: 10;
+      box-shadow: var(--shadow-card);
+    }
+    .slot-cell:hover .cell-tooltip { display: block; }
+
+    /* single-day slot rows */
+    .day-slot-row { display: flex; flex-direction: column; gap: 6px; }
+    .day-slot-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-radius: var(--radius-md);
+      background: var(--bg-card2); border: 1px solid var(--border);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .day-slot-item:hover { border-color: var(--accent); }
+    .day-slot-item .sitem-time { width: 90px; font-size: 0.78rem; color: var(--text-muted); flex-shrink: 0; }
+    .day-slot-item .sitem-bar { flex: 1; height: 22px; border-radius: 6px; display: flex; align-items: center; padding-left: 8px; }
+    .day-slot-item .sitem-bar span { font-size: 0.75rem; font-weight: 600; color: rgba(0,0,0,0.75); }
+    .day-slot-item .sitem-empty { flex: 1; font-size: 0.75rem; color: var(--text-muted); font-style: italic; }
+    .day-slot-item .sitem-edit { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; }
+
+    /* ─── ANALYTICS ──────────────────────────────────────────────── */
+    .analytics-grid {
+      display: grid; grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    @media (min-width: 600px) {
+      .analytics-grid { grid-template-columns: 1fr 1fr; }
+    }
+    .chart-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 18px;
+      box-shadow: var(--shadow-card);
+    }
+    .chart-card.full { grid-column: 1 / -1; }
+    .chart-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.9rem; font-weight: 700; color: var(--text-primary);
+      margin-bottom: 14px;
+    }
+    .chart-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+    canvas { max-height: 260px; }
+
+    /* Stats row */
+    .stats-row { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; margin-bottom: 16px; }
+    @media (min-width: 500px) { .stats-row { grid-template-columns: repeat(4,1fr); } }
+    .stat-box {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 14px 10px; text-align: center;
+    }
+    .stat-val { font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 800; color: var(--accent); }
+    .stat-lbl { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+    /* Date range filter */
+    .range-filter {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center;
+    }
+    .range-filter label { font-size: 0.78rem; color: var(--text-secondary); }
+    .range-filter input[type="date"] {
+      background: var(--bg-card2); border: 1px solid var(--border);
+      color: var(--text-primary); border-radius: var(--radius-sm);
+      padding: 6px 10px; font-size: 0.8rem;
+    }
+    .range-filter input:focus { border-color: var(--accent); outline: none; }
+    .range-btn {
+      padding: 6px 14px; border-radius: 16px; font-size: 0.78rem; font-weight: 600;
+      background: var(--bg-card2); border: 1px solid var(--border); color: var(--text-secondary);
+      transition: all 0.15s;
+    }
+    .range-btn:hover, .range-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* Heatmap */
+    .heatmap-wrap { overflow-x: auto; }
+    .heatmap-table { border-collapse: collapse; min-width: 500px; }
+    .heatmap-table th { font-size: 0.65rem; color: var(--text-muted); text-align: center; padding: 3px 2px; font-weight: 500; }
+    .heatmap-table td { width: 30px; height: 24px; border-radius: 4px; text-align: center; font-size: 0.6rem; }
+    .hm-row-label { font-size: 0.65rem; color: var(--text-muted); text-align: right; padding-right: 8px; width: 50px; }
+
+    /* Legend */
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-secondary); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+    /* ─── SYNC PAGE ──────────────────────────────────────────────── */
+    .sync-grid { display: grid; gap: 14px; }
+    .sync-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px;
+    }
+    .sync-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 6px; }
+    .sync-card p { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5; }
+    .btn-primary {
+      padding: 11px 22px; border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--accent), #9b6eff);
+      color: #fff; font-size: 0.88rem; font-weight: 700;
+      transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px;
+      box-shadow: 0 4px 16px rgba(124,90,255,0.35);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(124,90,255,0.5); }
+    .btn-secondary {
+      padding: 11px 22px; border-radius: var(--radius-md);
+      background: var(--bg-card2); border: 1.5px solid var(--border);
+      color: var(--text-primary); font-size: 0.88rem; font-weight: 600;
+      transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger {
+      padding: 11px 22px; border-radius: var(--radius-md);
+      background: rgba(244,63,94,0.1); border: 1.5px solid rgba(244,63,94,0.3);
+      color: #F43F5E; font-size: 0.88rem; font-weight: 600;
+      transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-danger:hover { background: rgba(244,63,94,0.2); border-color: #F43F5E; }
+    .file-drop {
+      border: 2px dashed var(--border); border-radius: var(--radius-md);
+      padding: 24px; text-align: center; color: var(--text-muted);
+      font-size: 0.85rem; cursor: pointer; transition: all 0.2s;
+    }
+    .file-drop:hover { border-color: var(--accent); color: var(--text-secondary); }
+    .progress-info {
+      background: var(--bg-card2); border-radius: var(--radius-md);
+      padding: 14px 16px;
+    }
+    .progress-bar-wrap { background: var(--bg-base); border-radius: 6px; height: 8px; margin: 8px 0; overflow: hidden; }
+    .progress-bar-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width 0.5s ease; }
+
+    /* ─── TOAST ──────────────────────────────────────────────────── */
+    #toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column-reverse; gap: 8px; pointer-events: none; }
+    .toast {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 12px 20px;
+      font-size: 0.85rem; color: var(--text-primary);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      animation: toastIn 0.3s ease, toastOut 0.3s 2.7s ease forwards;
+      pointer-events: all;
+    }
+    .toast.success { border-color: rgba(74,222,128,0.4); }
+    .toast.error { border-color: rgba(244,63,94,0.4); }
+    @keyframes toastIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes toastOut { from { opacity:1; } to { opacity:0; transform:translateY(8px); } }
+
+    /* ─── REMINDER MODAL ─────────────────────────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); z-index: 200;
+      align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg-card); border: 1px solid var(--border-glow);
+      border-radius: var(--radius-lg); padding: 24px;
+      max-width: 340px; width: 100%;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.7);
+      animation: fadeSlide 0.25s ease;
+    }
+    .modal h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .modal p { font-size: 0.83rem; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5; }
+    .modal-btns { display: flex; gap: 10px; }
+    .modal-btns button { flex: 1; }
+
+    /* ─── EMPTY STATE ────────────────────────────────────────────── */
+    .empty-state {
+      text-align: center; padding: 40px 20px;
+      color: var(--text-muted); font-size: 0.88rem;
+    }
+    .empty-state .empty-icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+    /* ─── RESPONSIVE ─────────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      .cat-grid { grid-template-columns: repeat(3,1fr); }
+      .cat-btn { padding: 10px 6px; font-size: 0.75rem; }
+      .cat-btn .cat-icon { font-size: 1.2rem; }
+      .stats-row { grid-template-columns: repeat(2,1fr); }
+    }
+
+    /* ─── ANIMATIONS ─────────────────────────────────────────────── */
+    .pulse { animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%,100% { opacity:1; } 50% { opacity:0.5; }
+    }
+  </style>
+</head>
+<body>
+<!-- OFFLINE BANNER -->
+<div id="offline-banner">📴 You're offline — app works normally, data is saved locally</div>
+<!-- INSTALL BAR -->
+<div id="install-bar">
+  <span>📲 Add DayTrack to your Home Screen for quick access</span>
+  <button onclick="installPWA()">Install</button>
+  <button class="ib-dismiss" onclick="document.getElementById('install-bar').classList.remove('visible')" title="Dismiss">✕</button>
+</div>
+
+<div id="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo"><span>⏱</span> DayTrack</div>
+      <div class="header-date" id="header-date-display">Loading…</div>
+      <div class="header-actions">
+        <button class="btn-icon" id="reminder-btn" title="Reminders" onclick="openReminderModal()">🔔</button>
+        <button class="btn-icon" id="export-excel-btn" title="Export Excel" onclick="exportExcel()">📊</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAV TABS -->
+  <nav class="nav-tabs" id="nav-tabs">
+    <button class="nav-tab active" data-tab="log" onclick="switchTab('log')">📝 Log</button>
+    <button class="nav-tab" data-tab="timeline" onclick="switchTab('timeline')">📅 Timeline</button>
+    <button class="nav-tab" data-tab="analytics" onclick="switchTab('analytics')">📈 Analytics</button>
+    <button class="nav-tab" data-tab="sync" onclick="switchTab('sync')">🔄 Sync</button>
+  </nav>
+
+  <!-- ─── PAGE: LOG ─────────────────────────────────────────── -->
+  <div id="tab-log" class="page active">
+    <div class="page-inner">
+
+      <!-- Current Slot Banner -->
+      <div class="current-slot-banner">
+        <div>
+          <div class="slot-label">Current Slot</div>
+          <div class="slot-time" id="slot-time-display">—</div>
+          <div class="slot-date" id="slot-date-display">—</div>
+        </div>
+        <div class="slot-status" id="slot-status">⏳ Pending</div>
+      </div>
+
+      <!-- Date/Slot Override -->
+      <div class="date-override">
+        <label>📆 Log for:</label>
+        <input type="date" id="override-date" />
+        <select id="override-slot">
+          <option value="">Current slot</option>
+        </select>
+      </div>
+
+      <!-- Category Selection -->
+      <div class="cat-label">Select Category</div>
+      <div class="cat-grid" id="cat-grid"></div>
+
+      <!-- Sub-category chips -->
+      <div class="cat-label">Select Sub-Activity</div>
+      <div class="sub-row" id="sub-row">
+        <span style="color:var(--text-muted);font-size:0.8rem;font-style:italic">← Pick a category first</span>
+      </div>
+
+      <!-- Notes -->
+      <textarea class="notes-input" id="notes-input" placeholder="Optional note… (e.g. 'Stand-up with team', 'Gym — chest day')"></textarea>
+
+      <!-- Log button -->
+      <button class="log-btn" id="log-btn" onclick="logEntry()">✅ Log This Slot</button>
+
+      <!-- Recent Entries -->
+      <div class="recent-title">⚡ Recent Entries</div>
+      <div class="recent-list" id="recent-list"></div>
+
+    </div>
+  </div>
+
+  <!-- ─── PAGE: TIMELINE ───────────────────────────────────── -->
+  <div id="tab-timeline" class="page">
+    <div class="page-inner">
+
+      <!-- Nav -->
+      <div class="timeline-nav">
+        <button onclick="timelineDay(-1)">← Prev</button>
+        <div class="timeline-date" id="timeline-date-label">—</div>
+        <button onclick="timelineDay(1)">Next →</button>
+        <div class="timeline-completion" id="timeline-completion">0/32</div>
+      </div>
+
+      <!-- Legend -->
+      <div class="legend" id="timeline-legend"></div>
+      <div style="margin: 14px 0;"></div>
+
+      <!-- Day slot list -->
+      <div class="day-slot-row" id="day-slot-list"></div>
+
+    </div>
+  </div>
+
+  <!-- ─── PAGE: ANALYTICS ──────────────────────────────────── -->
+  <div id="tab-analytics" class="page">
+    <div class="page-inner">
+
+      <!-- Date range filter -->
+      <div class="range-filter">
+        <label>From:</label>
+        <input type="date" id="range-from" />
+        <label>To:</label>
+        <input type="date" id="range-to" />
+        <button class="range-btn active" onclick="setRange('all')">All</button>
+        <button class="range-btn" onclick="setRange('week')">This Week</button>
+        <button class="range-btn" onclick="setRange('today')">Today</button>
+        <button class="range-btn" onclick="applyRange()">Apply</button>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stats-row">
+        <div class="stat-box"><div class="stat-val" id="stat-total-days">0</div><div class="stat-lbl">Days Logged</div></div>
+        <div class="stat-box"><div class="stat-val" id="stat-total-slots">0</div><div class="stat-lbl">Slots Filled</div></div>
+        <div class="stat-box"><div class="stat-val" id="stat-productive">0h</div><div class="stat-lbl">Productive Hrs</div></div>
+        <div class="stat-box"><div class="stat-val" id="stat-leisure">0h</div><div class="stat-lbl">Leisure Hrs</div></div>
+      </div>
+
+      <!-- Charts grid -->
+      <div class="analytics-grid">
+        <div class="chart-card">
+          <div class="chart-title">⏱ Time by Category</div>
+          <div class="chart-sub">Distribution of logged hours</div>
+          <canvas id="chart-pie"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">📅 Daily Hours — Work vs Rest</div>
+          <div class="chart-sub">Hours logged per day</div>
+          <canvas id="chart-bar"></canvas>
+        </div>
+        <div class="chart-card full">
+          <div class="chart-title">📈 Category Trends (Daily Hours)</div>
+          <div class="chart-sub">How each category evolves over 33 days</div>
+          <canvas id="chart-line"></canvas>
+        </div>
+        <div class="chart-card full">
+          <div class="chart-title">🔥 Activity Heatmap</div>
+          <div class="chart-sub">Most common activity per time slot across days</div>
+          <div class="heatmap-wrap">
+            <table class="heatmap-table" id="heatmap-table"></table>
+          </div>
+          <div class="legend" id="heatmap-legend"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─── PAGE: SYNC ───────────────────────────────────────── -->
+  <div id="tab-sync" class="page">
+    <div class="page-inner">
+
+      <!-- Overall progress -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="section-title">📊 Tracking Progress</div>
+        <div class="progress-info">
+          <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:var(--text-secondary)">
+            <span id="sync-progress-label">0 / 1056 slots</span>
+            <span id="sync-progress-pct">0%</span>
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="sync-progress-bar" style="width:0%"></div>
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-muted)">Oct 7 → Nov 8, 2026 · 6 AM – 10 PM · 32 slots/day</div>
+        </div>
+      </div>
+
+      <div class="sync-grid">
+        <!-- Export JSON -->
+        <div class="sync-card">
+          <h3>📤 Export Data (Sync)</h3>
+          <p>Download all your logged entries as a JSON file. Share it via WhatsApp, Email, or any method to import on another device.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn-primary" onclick="exportJSON()">⬇️ Download JSON</button>
+          </div>
+        </div>
+
+        <!-- Import JSON -->
+        <div class="sync-card">
+          <h3>📥 Import Data (Merge)</h3>
+          <p>Import a JSON file from another device. Entries are merged — newer timestamp wins for the same slot.</p>
+          <div class="file-drop" id="file-drop" onclick="document.getElementById('file-input').click()">
+            📂 Tap to select JSON file
+            <input type="file" id="file-input" accept=".json" style="display:none" onchange="importJSON(this)" />
+          </div>
+        </div>
+
+        <!-- Excel Export -->
+        <div class="sync-card">
+          <h3>📊 Export to Excel</h3>
+          <p>Generate a color-coded <code>.xlsx</code> file with raw log, daily grid, and weekly summary sheets — compatible with Excel & Google Sheets.</p>
+          <button class="btn-primary" onclick="exportExcel()">📥 Download Excel</button>
+        </div>
+
+        <!-- Clear data -->
+        <div class="sync-card">
+          <h3>🗑️ Clear All Data</h3>
+          <p>Permanently delete all logged entries from this device. Export a backup first!</p>
+          <button class="btn-danger" onclick="clearAllData()">🗑️ Clear Device Data</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<!-- REMINDER MODAL -->
+<div class="modal-overlay" id="reminder-modal">
+  <div class="modal">
+    <h3>🔔 30-Minute Reminders</h3>
+    <p>Enable browser notifications to be reminded every 30 minutes to log your activity. The reminder fires at the start of each slot.</p>
+    <div id="reminder-status" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px">Status: checking…</div>
+    <div class="modal-btns">
+      <button class="btn-primary" onclick="enableReminders()">✅ Enable</button>
+      <button class="btn-secondary" onclick="closeReminderModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// SERVICE WORKER + PWA
+// ═══════════════════════════════════════════════════════════════════
+let deferredInstallPrompt = null;
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.warn('SW failed:', err));
+  });
+}
+
+// Online / offline detection
+window.addEventListener('offline', () => document.getElementById('offline-banner').classList.add('visible'));
+window.addEventListener('online',  () => document.getElementById('offline-banner').classList.remove('visible'));
+if (!navigator.onLine) document.getElementById('offline-banner').classList.add('visible');
+
+// PWA Install prompt
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  document.getElementById('install-bar').classList.add('visible');
+});
+window.addEventListener('appinstalled', () => {
+  document.getElementById('install-bar').classList.remove('visible');
+  deferredInstallPrompt = null;
+  showToast('✅ DayTrack installed on Home Screen!', 'success');
+});
+
+function installPWA() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.then(() => {
+    deferredInstallPrompt = null;
+    document.getElementById('install-bar').classList.remove('visible');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DATA MODEL
+// ═══════════════════════════════════════════════════════════════════
+const TRACK_START = new Date('2026-10-07T00:00:00');
+const TRACK_END   = new Date('2026-11-08T23:59:59');
+const DAY_START_H = 6;   // 6 AM
+const DAY_END_H   = 22;  // 10 PM
+const SLOTS_PER_DAY = (DAY_END_H - DAY_START_H) * 2; // 32
+
+const CATEGORIES = [
+  {
+    id: 'morning', label: 'Morning Routine', icon: '🌅', color: '#FFD700',
+    subs: ['Freshen-Up','Getting Ready','Breakfast']
+  },
+  {
+    id: 'commute', label: 'Commute', icon: '🚌', color: '#FF8C00',
+    subs: ['Travel','Waiting for Transport']
+  },
+  {
+    id: 'work', label: 'Work', icon: '💼', color: '#4F8EF7',
+    subs: ['Project','Meeting','Planning','Email/Admin']
+  },
+  {
+    id: 'learning', label: 'Learning', icon: '📚', color: '#A855F7',
+    subs: ['Self-Study','Lecture','Online Course','Research']
+  },
+  {
+    id: 'reading', label: 'Reading', icon: '📖', color: '#20B2AA',
+    subs: ['Book','News','Articles']
+  },
+  {
+    id: 'hobby', label: 'Hobby', icon: '🎨', color: '#FF69B4',
+    subs: ['Yarn','Crafts','Other Hobby']
+  },
+  {
+    id: 'fitness', label: 'Fitness', icon: '🏋️', color: '#4ADE80',
+    subs: ['Gym','Walk/Run','Yoga','Sports']
+  },
+  {
+    id: 'entertain', label: 'Entertainment', icon: '📺', color: '#F43F5E',
+    subs: ['TV / Streaming','YouTube','Social Media','Music']
+  },
+  {
+    id: 'break', label: 'Break / Other', icon: '☕', color: '#6B7280',
+    subs: ['Rest','Nap','Miscellaneous','Household']
+  }
+];
+
+const PRODUCTIVE_CATS = ['work','learning','reading','fitness'];
+const LEISURE_CATS    = ['entertain','hobby','break'];
+
+// Category lookup by id
+const CAT_MAP = {};
+CATEGORIES.forEach(c => CAT_MAP[c.id] = c);
+
+// ─── Storage
+const STORAGE_KEY = 'daytrack_v1';
+
+function loadData() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveData(d) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
+}
+
+// Entry key: "YYYY-MM-DD|slotIndex" (0-31)
+function makeKey(dateStr, slotIdx) { return `${dateStr}|${slotIdx}`; }
+
+// ─── Time helpers
+function toDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function slotIndexForTime(h, min) {
+  return (h - DAY_START_H) * 2 + (min >= 30 ? 1 : 0);
+}
+
+function slotLabel(idx) {
+  const totalMins = DAY_START_H * 60 + idx * 30;
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  const h2 = Math.floor((totalMins + 30) / 60);
+  const m2 = (totalMins + 30) % 60;
+  return `${fmt(h)}:${fmt(m)} – ${fmt(h2)}:${fmt(m2)}`;
+}
+function fmt(n) { return String(n).padStart(2,'0'); }
+function slotStartStr(idx) {
+  const totalMins = DAY_START_H * 60 + idx * 30;
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return `${fmt(h)}:${fmt(m)}`;
+}
+
+function currentSlotInfo() {
+  const now = new Date();
+  const h = now.getHours(), m = now.getMinutes();
+  if (h < DAY_START_H || h >= DAY_END_H) return null;
+  return { dateStr: toDateStr(now), slotIdx: slotIndexForTime(h, m) };
+}
+
+function getAllDays() {
+  const days = [];
+  const d = new Date(TRACK_START);
+  while (d <= TRACK_END) { days.push(toDateStr(d)); d.setDate(d.getDate()+1); }
+  return days;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// UI STATE
+// ═══════════════════════════════════════════════════════════════════
+let selectedCat = null;
+let selectedSub = null;
+let timelineCurrentDay = toDateStr(new Date());
+let charts = {};
+let reminderIntervalId = null;
+
+// ═══════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  initOverridePicker();
+  renderCategoryGrid();
+  updateSlotBanner();
+  renderRecentEntries();
+  buildLegend('timeline-legend');
+  renderTimeline();
+  initAnalytics();
+  updateSyncProgress();
+  updateHeaderDate();
+  setInterval(updateSlotBanner, 30000);
+  setInterval(updateHeaderDate, 60000);
+  initDragDrop();
+});
+
+function updateHeaderDate() {
+  const now = new Date();
+  document.getElementById('header-date-display').textContent =
+    now.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+}
+
+// ─── Slot banner
+function updateSlotBanner() {
+  const info = currentSlotInfo();
+  const data = loadData();
+
+  if (!info) {
+    document.getElementById('slot-time-display').textContent = 'Outside tracking hours';
+    document.getElementById('slot-date-display').textContent = 'Active: 6 AM – 10 PM';
+    document.getElementById('slot-status').textContent = '😴 Off';
+    document.getElementById('slot-status').className = 'slot-status';
+    return;
+  }
+  document.getElementById('slot-time-display').textContent = slotLabel(info.slotIdx);
+  document.getElementById('slot-date-display').textContent =
+    new Date(info.dateStr).toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' });
+
+  const key = makeKey(info.dateStr, info.slotIdx);
+  const logged = !!data[key];
+  const el = document.getElementById('slot-status');
+  if (logged) {
+    el.textContent = '✅ Logged'; el.className = 'slot-status logged';
+  } else {
+    el.textContent = '⏳ Pending'; el.className = 'slot-status pending';
+  }
+}
+
+// ─── Override date/slot picker
+function initOverridePicker() {
+  const dateInput = document.getElementById('override-date');
+  const slotSel = document.getElementById('override-slot');
+  // Set default to today clamped to tracking range
+  const today = toDateStr(new Date());
+  dateInput.min = toDateStr(TRACK_START);
+  dateInput.max = toDateStr(TRACK_END);
+  dateInput.value = today;
+
+  // Populate slot dropdown
+  for (let i = 0; i < SLOTS_PER_DAY; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = slotLabel(i);
+    slotSel.appendChild(opt);
+  }
+  // Default to current slot
+  const cur = currentSlotInfo();
+  if (cur) slotSel.value = cur.slotIdx;
+  else slotSel.value = 0;
+
+  dateInput.addEventListener('change', () => checkSlotLogged());
+  slotSel.addEventListener('change', () => checkSlotLogged());
+  checkSlotLogged();
+}
+
+function getSelectedDateSlot() {
+  const dateStr = document.getElementById('override-date').value;
+  const slotIdx = parseInt(document.getElementById('override-slot').value);
+  return { dateStr, slotIdx };
+}
+
+function checkSlotLogged() {
+  const { dateStr, slotIdx } = getSelectedDateSlot();
+  const data = loadData();
+  const key = makeKey(dateStr, slotIdx);
+  const entry = data[key];
+  if (entry) {
+    // Pre-fill form
+    selectCategory(entry.catId, false);
+    setTimeout(() => selectSub(entry.sub, false), 50);
+    document.getElementById('notes-input').value = entry.note || '';
+    document.getElementById('slot-status').textContent = '✅ Logged';
+    document.getElementById('slot-status').className = 'slot-status logged';
+  } else {
+    document.getElementById('slot-status').textContent = '⏳ Pending';
+    document.getElementById('slot-status').className = 'slot-status pending';
+  }
+}
+
+// ─── Category grid
+function renderCategoryGrid() {
+  const grid = document.getElementById('cat-grid');
+  grid.innerHTML = '';
+  CATEGORIES.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'cat-btn';
+    btn.id = `cat-${cat.id}`;
+    btn.innerHTML = `<span class="cat-icon">${cat.icon}</span>${cat.label}`;
+    btn.style.background = hexAlpha(cat.color, 0.18);
+    btn.style.borderColor = hexAlpha(cat.color, 0.35);
+    btn.style.color = cat.color;
+    btn.onclick = () => selectCategory(cat.id);
+    grid.appendChild(btn);
+  });
+}
+
+function selectCategory(catId, updateUI = true) {
+  selectedCat = catId;
+  selectedSub = null;
+  // Update button states
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('selected'));
+  const btn = document.getElementById(`cat-${catId}`);
+  if (btn) btn.classList.add('selected');
+  // Render sub chips
+  renderSubChips(catId, updateUI);
+}
+
+function renderSubChips(catId, clearSelected = true) {
+  const cat = CAT_MAP[catId];
+  const row = document.getElementById('sub-row');
+  if (!cat) { row.innerHTML = '<span style="color:var(--text-muted);font-size:0.8rem;font-style:italic">← Pick a category first</span>'; return; }
+  row.innerHTML = '';
+  cat.subs.forEach(sub => {
+    const chip = document.createElement('button');
+    chip.className = 'sub-chip';
+    chip.textContent = sub;
+    chip.onclick = () => selectSub(sub);
+    if (!clearSelected && sub === selectedSub) chip.classList.add('selected');
+    row.appendChild(chip);
+  });
+}
+
+function selectSub(sub, updateUI = true) {
+  selectedSub = sub;
+  document.querySelectorAll('.sub-chip').forEach(c => {
+    c.classList.toggle('selected', c.textContent === sub);
+  });
+}
+
+// ─── Log entry
+function logEntry() {
+  if (!selectedCat) { showToast('Please select a category', 'error'); return; }
+  if (!selectedSub) { showToast('Please select a sub-activity', 'error'); return; }
+
+  const { dateStr, slotIdx } = getSelectedDateSlot();
+  const note = document.getElementById('notes-input').value.trim();
+  const key = makeKey(dateStr, slotIdx);
+  const data = loadData();
+
+  data[key] = {
+    catId: selectedCat,
+    cat: CAT_MAP[selectedCat].label,
+    sub: selectedSub,
+    note,
+    ts: Date.now()
+  };
+  saveData(data);
+
+  // Visual feedback
+  const btn = document.getElementById('log-btn');
+  btn.textContent = '✅ Saved!'; btn.disabled = true;
+  setTimeout(() => { btn.textContent = '✅ Log This Slot'; btn.disabled = false; }, 1200);
+
+  showToast(`Logged: ${selectedSub} (${slotLabel(slotIdx)})`, 'success');
+  updateSlotBanner();
+  renderRecentEntries();
+  updateSyncProgress();
+  document.getElementById('notes-input').value = '';
+}
+
+// ─── Recent entries
+function renderRecentEntries() {
+  const data = loadData();
+  const list = document.getElementById('recent-list');
+  const entries = Object.entries(data)
+    .sort((a,b) => (b[1].ts||0) - (a[1].ts||0))
+    .slice(0, 5);
+
+  if (!entries.length) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div>No entries yet. Log your first activity!</div>';
+    return;
+  }
+  list.innerHTML = entries.map(([key, e]) => {
+    const [dateStr, slotIdx] = key.split('|');
+    const cat = CAT_MAP[e.catId] || { color:'#888', label: e.cat };
+    return `<div class="recent-item">
+      <div class="recent-dot" style="background:${cat.color}"></div>
+      <div class="recent-time">${slotLabel(parseInt(slotIdx))}</div>
+      <div>
+        <div class="recent-cat">${e.sub}</div>
+        <div class="recent-sub">${cat.label} · ${dateStr}</div>
+      </div>
+      ${e.note ? `<div class="recent-note">${e.note}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TIMELINE
+// ═══════════════════════════════════════════════════════════════════
+function timelineDay(delta) {
+  const d = new Date(timelineCurrentDay + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  if (d < TRACK_START) return;
+  if (d > TRACK_END) return;
+  timelineCurrentDay = toDateStr(d);
+  renderTimeline();
+}
+
+function renderTimeline() {
+  const dateStr = timelineCurrentDay;
+  const data = loadData();
+  const d = new Date(dateStr + 'T12:00:00');
+
+  document.getElementById('timeline-date-label').textContent =
+    d.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  // Count logged
+  let logged = 0;
+  for (let i = 0; i < SLOTS_PER_DAY; i++) {
+    if (data[makeKey(dateStr, i)]) logged++;
+  }
+  document.getElementById('timeline-completion').textContent = `${logged}/${SLOTS_PER_DAY} slots`;
+
+  // Slot list
+  const list = document.getElementById('day-slot-list');
+  list.innerHTML = '';
+
+  for (let i = 0; i < SLOTS_PER_DAY; i++) {
+    const key = makeKey(dateStr, i);
+    const entry = data[key];
+    const cat = entry ? CAT_MAP[entry.catId] : null;
+
+    const item = document.createElement('div');
+    item.className = 'day-slot-item';
+    item.onclick = () => {
+      // Jump to log tab with this slot pre-filled
+      document.getElementById('override-date').value = dateStr;
+      document.getElementById('override-slot').value = i;
+      if (entry) {
+        selectCategory(entry.catId, false);
+        setTimeout(() => selectSub(entry.sub, false), 50);
+        document.getElementById('notes-input').value = entry.note || '';
+      }
+      switchTab('log');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    item.innerHTML = `
+      <div class="sitem-time">${slotLabel(i)}</div>
+      ${entry && cat
+        ? `<div class="sitem-bar" style="background:${hexAlpha(cat.color,0.25)};border-left:3px solid ${cat.color}">
+             <span style="color:${cat.color}">${cat.icon} ${entry.sub}</span>
+           </div>
+           ${entry.note ? `<div class="sitem-edit" title="${entry.note}">📝</div>` : ''}`
+        : `<div class="sitem-empty">— not logged —</div>
+           <div class="sitem-edit">✏️</div>`
+      }
+    `;
+    list.appendChild(item);
+  }
+}
+
+function buildLegend(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = CATEGORIES.map(c =>
+    `<div class="legend-item">
+       <div class="legend-dot" style="background:${c.color}"></div>
+       ${c.icon} ${c.label}
+     </div>`
+  ).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ANALYTICS
+// ═══════════════════════════════════════════════════════════════════
+let rangeFrom = toDateStr(TRACK_START);
+let rangeTo   = toDateStr(TRACK_END);
+
+function initAnalytics() {
+  document.getElementById('range-from').value = rangeFrom;
+  document.getElementById('range-to').value   = rangeTo;
+  renderAnalytics();
+}
+
+function setRange(mode) {
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  const today = toDateStr(new Date());
+  if (mode === 'all') {
+    rangeFrom = toDateStr(TRACK_START); rangeTo = toDateStr(TRACK_END);
+  } else if (mode === 'week') {
+    const d = new Date(); d.setDate(d.getDate() - d.getDay());
+    rangeFrom = toDateStr(d); rangeTo = today;
+  } else if (mode === 'today') {
+    rangeFrom = today; rangeTo = today;
+  }
+  document.getElementById('range-from').value = rangeFrom;
+  document.getElementById('range-to').value   = rangeTo;
+  renderAnalytics();
+}
+
+function applyRange() {
+  rangeFrom = document.getElementById('range-from').value;
+  rangeTo   = document.getElementById('range-to').value;
+  renderAnalytics();
+}
+
+function getFilteredData() {
+  const data = loadData();
+  const result = {};
+  for (const [key, val] of Object.entries(data)) {
+    const [dateStr] = key.split('|');
+    if (dateStr >= rangeFrom && dateStr <= rangeTo) result[key] = val;
+  }
+  return result;
+}
+
+function renderAnalytics() {
+  const data = getFilteredData();
+  const entries = Object.entries(data);
+
+  // Aggregate by category
+  const catHours = {};
+  CATEGORIES.forEach(c => catHours[c.id] = 0);
+  entries.forEach(([,e]) => { if (catHours[e.catId] !== undefined) catHours[e.catId] += 0.5; });
+
+  // Unique days
+  const daysSet = new Set(entries.map(([k]) => k.split('|')[0]));
+  const daysLogged = daysSet.size;
+  const totalSlots = entries.length;
+
+  const productiveH = PRODUCTIVE_CATS.reduce((s,c) => s + catHours[c], 0);
+  const leisureH    = LEISURE_CATS.reduce((s,c) => s + catHours[c], 0);
+
+  document.getElementById('stat-total-days').textContent  = daysLogged;
+  document.getElementById('stat-total-slots').textContent = totalSlots;
+  document.getElementById('stat-productive').textContent  = productiveH.toFixed(1) + 'h';
+  document.getElementById('stat-leisure').textContent     = leisureH.toFixed(1) + 'h';
+
+  renderPieChart(catHours);
+  renderBarChart(data);
+  renderLineChart(data);
+  renderHeatmap(data);
+}
+
+function renderPieChart(catHours) {
+  const labels = CATEGORIES.map(c => `${c.icon} ${c.label}`);
+  const vals   = CATEGORIES.map(c => catHours[c.id] || 0);
+  const colors = CATEGORIES.map(c => c.color);
+
+  if (charts.pie) charts.pie.destroy();
+  charts.pie = new Chart(document.getElementById('chart-pie'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: vals, backgroundColor: colors, borderColor: '#0d0d1a', borderWidth: 2, hoverOffset: 8 }] },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.parsed.toFixed(1)}h`
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderBarChart(data) {
+  // Hours per day (productive vs leisure)
+  const days = getAllDaysInRange();
+  const productive = days.map(d => {
+    return PRODUCTIVE_CATS.reduce((s, catId) => {
+      return s + Object.entries(data).filter(([k,e]) => k.startsWith(d+'|') && e.catId === catId).length * 0.5;
+    }, 0);
+  });
+  const leisure = days.map(d => {
+    return LEISURE_CATS.reduce((s, catId) => {
+      return s + Object.entries(data).filter(([k,e]) => k.startsWith(d+'|') && e.catId === catId).length * 0.5;
+    }, 0);
+  });
+
+  if (charts.bar) charts.bar.destroy();
+  charts.bar = new Chart(document.getElementById('chart-bar'), {
+    type: 'bar',
+    data: {
+      labels: days.map(d => d.slice(5)),
+      datasets: [
+        { label: '💼 Productive', data: productive, backgroundColor: 'rgba(79,142,247,0.7)', borderRadius: 4 },
+        { label: '🎮 Leisure',   data: leisure,    backgroundColor: 'rgba(244,63,94,0.7)',  borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      scales: {
+        x: { stacked: true, ticks: { color: '#60607a', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { stacked: true, ticks: { color: '#60607a' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+      },
+      plugins: { legend: { labels: { color: '#a0a0c0', boxWidth: 14 } } }
+    }
+  });
+}
+
+function renderLineChart(data) {
+  const days = getAllDaysInRange();
+  // Show top 4 categories by total hours
+  const totals = CATEGORIES.map(c => ({
+    cat: c,
+    total: Object.values(data).filter(e => e.catId === c.id).length * 0.5
+  })).sort((a,b) => b.total - a.total).slice(0,4);
+
+  const datasets = totals.map(({ cat }) => ({
+    label: `${cat.icon} ${cat.label}`,
+    data: days.map(d =>
+      Object.entries(data).filter(([k,e]) => k.startsWith(d+'|') && e.catId === cat.id).length * 0.5
+    ),
+    borderColor: cat.color,
+    backgroundColor: hexAlpha(cat.color, 0.12),
+    fill: true,
+    tension: 0.4,
+    pointRadius: 3,
+    pointHoverRadius: 5
+  }));
+
+  if (charts.line) charts.line.destroy();
+  charts.line = new Chart(document.getElementById('chart-line'), {
+    type: 'line',
+    data: { labels: days.map(d => d.slice(5)), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      scales: {
+        x: { ticks: { color: '#60607a', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { ticks: { color: '#60607a' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+      },
+      plugins: {
+        legend: { labels: { color: '#a0a0c0', boxWidth: 14 } }
+      }
+    }
+  });
+}
+
+function renderHeatmap(data) {
+  const table = document.getElementById('heatmap-table');
+  const days = getAllDaysInRange();
+  // For each slot (row) and day (col): find most common category
+  // Transpose: rows = hours (every hour), cols = days
+  const slotsToShow = [];
+  for (let i = 0; i < SLOTS_PER_DAY; i += 2) slotsToShow.push(i); // every hour
+
+  let html = '<thead><tr><th class="hm-row-label">Time</th>';
+  days.forEach(d => { html += `<th>${d.slice(8)}<br/><span style="font-size:0.55rem">${new Date(d+'T12:00:00').toLocaleDateString('en-IN',{weekday:'short'})}</span></th>`; });
+  html += '</tr></thead><tbody>';
+
+  slotsToShow.forEach(si => {
+    html += `<tr><td class="hm-row-label">${slotStartStr(si)}</td>`;
+    days.forEach(d => {
+      const e0 = data[makeKey(d, si)];
+      const e1 = data[makeKey(d, si+1)];
+      const e = e0 || e1;
+      if (e) {
+        const cat = CAT_MAP[e.catId];
+        const color = cat ? cat.color : '#6B7280';
+        html += `<td style="background:${hexAlpha(color,0.6)};border-radius:4px" title="${cat?cat.label:''} – ${e.sub}"></td>`;
+      } else {
+        html += `<td style="background:rgba(255,255,255,0.03);border-radius:4px"></td>`;
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  table.innerHTML = html;
+
+  buildLegend('heatmap-legend');
+}
+
+function getAllDaysInRange() {
+  const days = [];
+  const d = new Date(rangeFrom + 'T12:00:00');
+  const end = new Date(rangeTo + 'T12:00:00');
+  while (d <= end) { days.push(toDateStr(d)); d.setDate(d.getDate()+1); }
+  return days;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SYNC & EXPORT
+// ═══════════════════════════════════════════════════════════════════
+function updateSyncProgress() {
+  const data = loadData();
+  const total = 33 * SLOTS_PER_DAY;
+  const logged = Object.keys(data).length;
+  const pct = Math.round(logged / total * 100);
+  document.getElementById('sync-progress-label').textContent = `${logged} / ${total} slots`;
+  document.getElementById('sync-progress-pct').textContent   = pct + '%';
+  document.getElementById('sync-progress-bar').style.width   = pct + '%';
+}
+
+function exportJSON() {
+  const data = loadData();
+  const blob = new Blob([JSON.stringify({version:1, exportedAt: new Date().toISOString(), entries: data}, null, 2)],
+    { type: 'application/json' });
+  downloadBlob(blob, `daytrack-${toDateStr(new Date())}.json`);
+  showToast('JSON exported successfully ✅', 'success');
+}
+
+function importJSON(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      const incoming = parsed.entries || parsed;
+      const current = loadData();
+      let merged = 0;
+      for (const [key, val] of Object.entries(incoming)) {
+        if (!current[key] || (val.ts||0) > (current[key].ts||0)) {
+          current[key] = val; merged++;
+        }
+      }
+      saveData(current);
+      showToast(`Merged ${merged} entries ✅`, 'success');
+      renderRecentEntries();
+      updateSyncProgress();
+      updateSlotBanner();
+    } catch { showToast('Invalid JSON file ❌', 'error'); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function initDragDrop() {
+  const drop = document.getElementById('file-drop');
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.style.borderColor = 'var(--accent)'; });
+  drop.addEventListener('dragleave', () => { drop.style.borderColor = ''; });
+  drop.addEventListener('drop', e => {
+    e.preventDefault(); drop.style.borderColor = '';
+    const file = e.dataTransfer.files[0];
+    if (file) { const dt = new DataTransfer(); dt.items.add(file); document.getElementById('file-input').files = dt.files; importJSON(document.getElementById('file-input')); }
+  });
+}
+
+function clearAllData() {
+  if (!confirm('⚠️ Delete ALL entries from this device? This cannot be undone.\n\nExport a backup first!')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  showToast('All data cleared 🗑️');
+  renderRecentEntries(); updateSyncProgress(); updateSlotBanner(); renderTimeline();
+}
+
+// ─── Excel Export
+function exportExcel() {
+  const data = loadData();
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet 1: Raw Log
+  const rawRows = [['Date','Day','Slot','Time Range','Category','Sub-Activity','Notes','Timestamp']];
+  const days = getAllDays();
+  days.forEach(dateStr => {
+    const d = new Date(dateStr+'T12:00:00');
+    const dayName = d.toLocaleDateString('en-IN',{weekday:'long'});
+    for (let i = 0; i < SLOTS_PER_DAY; i++) {
+      const key = makeKey(dateStr, i);
+      const e = data[key];
+      rawRows.push([
+        dateStr, dayName, i+1, slotLabel(i),
+        e ? CAT_MAP[e.catId]?.label || e.cat : '',
+        e ? e.sub : '',
+        e ? e.note || '' : '',
+        e ? new Date(e.ts).toLocaleString('en-IN') : ''
+      ]);
+    }
+  });
+  const ws1 = XLSX.utils.aoa_to_sheet(rawRows);
+  ws1['!cols'] = [14,12,6,20,20,20,30,20].map(w => ({wch:w}));
+  XLSX.utils.book_append_sheet(wb, ws1, 'Log');
+
+  // ── Sheet 2: Daily Grid (rows=days, cols=slots)
+  const slotHeaders = Array.from({length:SLOTS_PER_DAY}, (_,i) => slotLabel(i));
+  const gridRows = [['Date','Day',...slotHeaders]];
+  days.forEach(dateStr => {
+    const d = new Date(dateStr+'T12:00:00');
+    const row = [dateStr, d.toLocaleDateString('en-IN',{weekday:'short'})];
+    for (let i = 0; i < SLOTS_PER_DAY; i++) {
+      const e = data[makeKey(dateStr,i)];
+      row.push(e ? e.sub : '');
+    }
+    gridRows.push(row);
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(gridRows);
+  ws2['!cols'] = [14,8,...Array(SLOTS_PER_DAY).fill({wch:14})];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Daily Grid');
+
+  // ── Sheet 3: Weekly Summary
+  const catHeaders = CATEGORIES.map(c => c.label);
+  const summRows = [['Week','From','To','Total Logged (hrs)', ...catHeaders]];
+  let weekNum = 1;
+  for (let wi = 0; wi < days.length; wi += 7) {
+    const weekDays = days.slice(wi, wi+7);
+    const from = weekDays[0], to = weekDays[weekDays.length-1];
+    let totalLogged = 0;
+    const catCounts = CATEGORIES.map(() => 0);
+    weekDays.forEach(dateStr => {
+      for (let i = 0; i < SLOTS_PER_DAY; i++) {
+        const e = data[makeKey(dateStr,i)];
+        if (e) {
+          totalLogged += 0.5;
+          const ci = CATEGORIES.findIndex(c => c.id === e.catId);
+          if (ci >= 0) catCounts[ci] += 0.5;
+        }
+      }
+    });
+    summRows.push([`Week ${weekNum++}`, from, to, totalLogged, ...catCounts]);
+  }
+  const ws3 = XLSX.utils.aoa_to_sheet(summRows);
+  ws3['!cols'] = [8,14,14,18,...Array(CATEGORIES.length).fill({wch:16})];
+  XLSX.utils.book_append_sheet(wb, ws3, 'Weekly Summary');
+
+  XLSX.writeFile(wb, `DayTrack-Export-${toDateStr(new Date())}.xlsx`);
+  showToast('Excel file downloaded 📊', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// REMINDERS
+// ═══════════════════════════════════════════════════════════════════
+function openReminderModal() {
+  document.getElementById('reminder-modal').classList.add('open');
+  const status = document.getElementById('reminder-status');
+  if (!('Notification' in window)) {
+    status.textContent = '⚠️ Notifications not supported in this browser.';
+  } else if (Notification.permission === 'granted') {
+    status.textContent = '✅ Notifications already enabled!';
+  } else if (Notification.permission === 'denied') {
+    status.textContent = '🚫 Blocked by browser. Enable in site settings.';
+  } else {
+    status.textContent = '📵 Notifications not yet enabled.';
+  }
+}
+function closeReminderModal() {
+  document.getElementById('reminder-modal').classList.remove('open');
+}
+
+async function enableReminders() {
+  if (!('Notification' in window)) { showToast('Notifications not supported', 'error'); return; }
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    scheduleNextReminder();
+    showToast('🔔 Reminders enabled!', 'success');
+    document.getElementById('reminder-btn').classList.add('active');
+    closeReminderModal();
+  } else {
+    showToast('Permission denied', 'error');
+  }
+}
+
+function scheduleNextReminder() {
+  // Fire at next 30-min boundary
+  const now = new Date();
+  const mins = now.getMinutes();
+  const waitMins = mins < 30 ? 30 - mins : 60 - mins;
+  const waitMs = waitMins * 60 * 1000 - now.getSeconds() * 1000;
+  setTimeout(() => {
+    fireReminder();
+    setInterval(fireReminder, 30 * 60 * 1000);
+  }, waitMs);
+}
+
+function fireReminder() {
+  const info = currentSlotInfo();
+  if (!info) return;
+  new Notification('⏱ DayTrack — Log Time!', {
+    body: `New slot: ${slotLabel(info.slotIdx)}\nTap to log your activity.`,
+    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><text y="52" font-size="52">⏱</text></svg>'
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NAV
+// ═══════════════════════════════════════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+
+  if (tab === 'timeline') renderTimeline();
+  if (tab === 'analytics') renderAnalytics();
+  if (tab === 'sync') updateSyncProgress();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════════
+function hexAlpha(hex, alpha) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function showToast(msg, type='') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3100);
+}
+
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+</script>
+</body>
+</html>
